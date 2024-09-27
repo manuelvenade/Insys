@@ -1,0 +1,59 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from pyfume.Clustering import Clusterer
+from pyfume.EstimateAntecendentSet import AntecedentEstimator
+from pyfume.EstimateConsequentParameters import ConsequentEstimator
+from pyfume.SimpfulModelBuilder import SugenoFISBuilder
+from pyfume.Tester import SugenoFISTester
+from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, explained_variance_score
+import matplotlib.pyplot as plt
+
+
+# Load the hair dryer dataset
+data = pd.read_csv(r'C:\Users\manue\Downloads\first_assignment\data/hairdryer.csv', header=None)
+data.columns = ['Input Voltage', 'Output Temperature']
+
+# Scaling the data
+scaler = MinMaxScaler()
+scaled_data = scaler.fit_transform(data)
+
+# Separate input and output
+X = (scaled_data[:, 0] ).astype(int).reshape(-1,1) 
+y = scaled_data[:, 1]  # Output Temperature
+
+# Split data (80% train, 20% test)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Fuzzy C-means clustering with 2 clusters
+cl = Clusterer(x_train=X_train, y_train=y_train, nr_clus=2)
+clust_centers, part_matrix, _ = cl.cluster(method='fcm')
+
+# Estimate antecedents (membership functions)
+ae = AntecedentEstimator(X_train, part_matrix)
+antecedent_params = ae.determineMF()
+
+# Estimate consequent parameters using Sugeno method
+ce = ConsequentEstimator(X_train, y_train, part_matrix)
+conseq_params = ce.suglms()  # First-order Sugeno model
+
+# Correct variable name without space
+var_names = ['Input_Voltage']  # Define variable names for clarity
+
+# Build the Sugeno FIS model with corrected variable name
+modbuilder = SugenoFISBuilder(antecedent_params, conseq_params, variable_names=var_names, save_simpful_code=False)
+model = modbuilder.get_model()
+
+# Test the model on the test set
+modtester = SugenoFISTester(model, X_test, var_names)
+y_pred = modtester.predict()[0]  # Predict the test set
+
+# Compute performance metrics
+mse = mean_squared_error(y_test, y_pred)
+mape = mean_absolute_percentage_error(y_test, y_pred)
+exp_var = explained_variance_score(y_test, y_pred)
+
+# Print metrics
+print(f" Mean Squared Error: {mse:.3f}")
+print(f"Mean Absolute Percentage Error: {mape*100:.1f}%")
+print(f"Explained Variance Score: {exp_var:.3f}")
